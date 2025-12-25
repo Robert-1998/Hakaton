@@ -1,0 +1,16 @@
+# Python
+venv
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE (VS Code, Pycharm, etc)
+.vscode/
+.idea/
+
+# Сгенерированные данные
+generated_media/
+media_files/
+
+# Локальная LLM (НЕ ЗАГРУЖАЕМ БОЛЬШИЕ ФАЙЛЫ)
+my_llm_manual/

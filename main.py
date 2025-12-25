@@ -37,7 +37,22 @@ async def start_generation(request: GenerationRequest):
     )
     
     return {"status": "processing", "task_id": task.id}
+    
+# Вставьте этот код в main.py
 
+from celery_worker import generate_title_task
+
+# --- Модель для запроса на генерацию ТОЛЬКО ТЕКСТА ---
+class TitleRequest(BaseModel):
+    prompt: str = Field(..., min_length=5, max_length=500, description="Тема или запрос для генерации продающего заголовка.")
+
+@app.post("/api/v1/generate_title/")
+async def start_title_generation(request: TitleRequest):
+    # Запускаем задачу Celery, которая вызывает TextGenerator.generate_title()
+    task = generate_title_task.delay(request.prompt)
+    
+    return {"status": "processing", "task_id": task.id}
+    
 @app.get("/api/v1/status/{task_id}")
 async def get_task_status(task_id: str):
     task_result = AsyncResult(task_id, app=celery_app)
