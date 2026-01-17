@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+my_llm_manual/
+*.rdb
+
+# Project specific
+generated_media/*.png
+generated_media/*.jpg
+!generated_media/.gitkeep
+
+# OS
+.DS_Store
