@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+celery[redis]==5.4.0
+redis==5.0.8
+python-multipart==0.0.9
+Pillow==10.4.0
+requests==2.32.3
+g4f==6.9.3
