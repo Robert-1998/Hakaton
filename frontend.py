@@ -1,107 +1,136 @@
 import streamlit as st
 import requests
+import json
 import time
-import os
 
-# --- Настройки страницы ---
-st.set_page_config(page_title="AI Banner Generator", layout="wide")
+# --- Конфигурация страницы ---
+st.set_page_config(
+    page_title="Banner AI Generator",
+    page_icon="🎨",
+    layout="wide"
+)
 
+# Адрес вашего API (измените, если хостинг отличается)
+API_URL = "http://localhost:8000"
+
+# --- Стилизация интерфейса ---
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stImage > img {
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .variant-card {
+        background-color: #161b22;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        border: 1px solid #30363d;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- Боковая панель (Настройки) ---
+st.sidebar.header("⚙️ Настройки генерации")
+user_input = st.sidebar.text_area(
+    "Тема объявления:",
+    placeholder="Например: Курсы фехтования со скидкой 50%",
+    help="Введите краткое описание вашего продукта или услуги"
+)
+
+selected_style = st.sidebar.selectbox(
+    "Визуальный стиль:",
+    ["Photorealistic", "Cyberpunk", "Watercolor", "Anime", "Default"]
+)
+
+n_variants = st.sidebar.slider("Количество вариантов:", min_value=3, max_value=5, value=3)
+st.sidebar.caption("Согласно ТЗ генерируется минимум 3 варианта")
+
+# --- Главный экран ---
 st.title("🚀 Генератор рекламных баннеров")
+st.markdown("Система создает комплексное решение: **фон + текст + композиция**.")
 
-# --- Боковая панель (Sidebar) ---
-with st.sidebar:
-    st.header("⚙️ Конфигурация")
-    # Убедитесь, что порт совпадает с портом вашего FastAPI
-    api_url = st.text_input("URL вашего API:", value="http://localhost:8000")
-    
-    st.header("🖌 Настройки стиля")
-    style = st.selectbox("Выберите стиль", ["Photorealistic", "Cyberpunk", "Watercolor", "Anime", "Default"])
-    aspect_ratio = st.radio("Соотношение сторон", ["1:1", "16:9", "9:16"], index=1)
-    n_images = st.slider("Количество вариантов", min_value=1, max_value=4, value=2)
-
-# --- Основная область ввода ---
-prompt = st.text_area("Введите описание продукта или акции:",
-                      placeholder="Например: Курсы фехтования со скидкой 50% до конца января",
-                      height=150)
-
-if st.button("Сгенерировать баннеры", type="primary"):
-    if not prompt:
-        st.warning("Пожалуйста, введите описание.")
+if st.sidebar.button("Сгенерировать баннеры", type="primary"):
+    if not user_input:
+        st.error("Пожалуйста, введите тему объявления!")
     else:
-        with st.status("🚀 Запуск процесса...") as status:
+        with st.status("🤖 Работаем...", expanded=True) as status:
+            st.write("Генерируем рекламные тексты и идеи для фона...")
+            
+            payload = {
+                "prompt": user_input,
+                "style": selected_style,
+                "aspect_ratio": "16:9",
+                "n_images": n_variants
+            }
+            
             try:
-                # 1. Отправка запроса (Путь соответствует вашему Main.py)
-                payload = {
-                    "prompt": prompt,
-                    "style": style,
-                    "aspect_ratio": aspect_ratio,
-                    "n_images": n_images
-                }
+                # Отправка запроса к FastAPI
+                response = requests.post(f"{API_URL}/api/v1/generate", json=payload)
                 
-                # ВАЖНО: Путь /api/v1/generate без завершающего слэша
-                response = requests.post(f"{api_url}/api/v1/generate", json=payload)
-                response.raise_for_status()
-                task_id = response.json().get("task_id")
-                
-                st.write(f"✅ Задача принята! ID: `{task_id}`")
-                
-                # 2. Опрос состояния задачи (Polling)
-                variants = []
-                while True:
-                    status.update(label="⏳ Ожидание завершения воркера (это может занять 10-30 сек)...")
-                    # Путь соответствует вашему get_task_status
-                    check_res = requests.get(f"{api_url}/api/v1/status/{task_id}")
-                    check_res.raise_for_status()
-                    task_data = check_res.json()
+                if response.status_code == 200:
+                    task_id = response.json().get("task_id")
+                    st.write(f"Задача запущена (ID: {task_id}). Ожидаем отрисовку 1920x1080...")
                     
-                    if task_data.get("status") == "SUCCESS":
-                        status.update(label="✨ Баннеры готовы!", state="complete")
-                        # Извлекаем результат, который вернул Celery
-                        result_content = task_data.get("result", {})
-                        variants = result_content.get("variants", [])
-                        break
-                    elif task_data.get("status") in ["FAILURE", "REVOKED"]:
-                        st.error(f"Ошибка задачи: {task_data.get('status')}")
-                        break
+                    # Опрос состояния задачи (Polling)
+                    while True:
+                        res = requests.get(f"{API_URL}/api/v1/result/{task_id}")
+                        result = res.json()
+                        
+                        if result.get("status") == "SUCCESS":
+                            status.update(label="✅ Генерация завершена!", state="complete", expanded=False)
+                            variants = result.get("variants", [])
+                            break
+                        elif result.get("status") == "FAILURE":
+                            st.error("Ошибка при генерации.")
+                            break
+                        
+                        time.sleep(2)
                     
-                    time.sleep(2)
-                
-                # 3. Отображение результата
-                if variants:
+                    # --- Отображение результатов ---
                     st.divider()
-                    st.subheader(f"🎨 Сгенерировано вариантов: {len(variants)}")
-
+                    st.header("🎯 Готовые варианты")
+                    
                     for var in variants:
                         with st.container():
-                            # Создаем две колонки: текст и изображение
-                            col_text, col_img = st.columns([1, 2])
+                            st.markdown(f"### Вариант №{var['variant_num']}")
                             
-                            marketing = var.get("text", {})
+                            # Колонка с текстом и колонка с изображением
+                            col_img, col_info = st.columns([3, 1])
                             
-                            with col_text:
-                                st.markdown(f"### Вариант №{var['variant_num']}")
-                                st.success(f"**Заголовок:**\n{marketing.get('title', '—')}")
-                                st.info(f"**Оффер:** {marketing.get('subtitle', '—')}")
-                                
-                                # Кнопка-заглушка с текстом CTA из нейросети
-                                cta_label = marketing.get('cta', 'Подробнее')
-                                st.button(cta_label, key=f"btn_{var['variant_num']}_{task_id}")
-                            
+                            marketing = var.get("text")
+                            # Обработка случая, если JSON пришел строкой
+                            if isinstance(marketing, str):
+                                try: marketing = json.loads(marketing)
+                                except: marketing = {"title": "Ошибка парсинга", "subtitle": marketing}
+
                             with col_img:
-                                # Путь к картинке: меняем папку на /media/ (как в app.mount)
-                                raw_path = var.get("image_path", "")
-                                if raw_path:
-                                    # Если путь 'generated_media/file.png', превращаем в 'http://localhost:8000/media/file.png'
-                                    file_name = os.path.basename(raw_path)
-                                    full_img_url = f"{api_url}/media/{file_name}"
-                                    st.image(full_img_url, use_container_width=True)
-                                else:
-                                    st.error("Изображение отсутствует.")
+                                # Формируем URL картинки (через эндпоинт статики FastAPI)
+                                img_filename = var['image_path'].split('/')[-1]
+                                st.image(
+                                    f"{API_URL}/media/{img_filename}",
+                                    use_container_width=True,
+                                    caption=f"Разрешение: 1920x1080 | Формат: 16:9"
+                                )
                             
+                            with col_info:
+                                st.success(f"**Заголовок:**\n{marketing.get('title', '—')}")
+                                st.info(f"**Оффер:**\n{marketing.get('subtitle', '—')}")
+                                st.button(
+                                    marketing.get('cta', 'Узнать цену'),
+                                    key=f"btn_{var['variant_num']}",
+                                    use_container_width=True
+                                )
                             st.divider()
-
+                            
+                else:
+                    st.error(f"Ошибка API: {response.text}")
             except Exception as e:
-                st.error(f"🔴 Ошибка: {e}")
+                st.error(f"Не удалось связаться с сервером: {e}")
 
-# --- Подвал ---
-st.caption("Hakaton 2026 - Image & Text Generation System")
+else:
+    # Состояние покоя
+    st.info("Введите данные в левой панели и нажмите 'Сгенерировать', чтобы получить минимум 3 варианта баннера.")

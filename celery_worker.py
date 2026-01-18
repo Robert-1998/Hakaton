@@ -1,96 +1,90 @@
-from celery import Celery, shared_task
 import os
-import uuid
-import time
-import json
-import re
 import random
+import time
+from celery import Celery
+from PIL import Image, ImageDraw, ImageFont
 from text_generator import TextGenerator
 from image_generator import ImageGenerator
-from prompt_manager import PromptManager # Импортируем менеджер промптов
 
-# --- Инициализация генераторов ---
+# Инициализация
 text_gen = TextGenerator()
 img_gen = ImageGenerator()
 
-# --- Настройка Celery ---
-REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+# 1. ИСПРАВЛЕНИЕ: Динамический адрес Redis для Docker
+REDIS_HOST = os.environ.get('REDIS_HOST', 'redis')
 celery_app = Celery('tasks',
-                     broker=f'redis://{REDIS_HOST}:6379/0',
-                     backend=f'redis://{REDIS_HOST}:6379/1')
+                    broker=f'redis://{REDIS_HOST}:6379/0',
+                    backend=f'redis://{REDIS_HOST}:6379/1')
 
-def extract_json_from_text(text):
-    """Вспомогательная функция для извлечения JSON из ответа нейросети."""
+def apply_typography(image_path, text_data):
+    """Наложение текста на изображение согласно ТЗ."""
     try:
-        # Ищем блок {...} на случай, если нейросеть добавила лишний текст
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-        return None
-    except Exception:
-        return None
+        img = Image.open(image_path).convert("RGBA")
+        # Принудительно 1920x1080 по ТЗ
+        img = img.resize((1920, 1080), Image.Resampling.LANCZOS)
+        
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        
+        # Градиентная подложка слева для читаемости
+        for x in range(900):
+            alpha = int(200 * (1 - x/900))
+            draw.line([(x, 0), (x, 1080)], fill=(0, 0, 0, alpha))
 
-@shared_task(bind=True)
-def placeholder_generation_task(self, prompt: str, style: str, aspect_ratio: str, n_images: int):
-    """Генерация нескольких вариантов баннеров (Текст JSON + Изображение)."""
-    
-    print(f"--- Задача получена: '{prompt}' (Стиль: {style}, Вариантов: {n_images}) ---")
-    
+        # 2. ИСПРАВЛЕНИЕ: Путь к шрифту для Docker (Linux)
+        # В Dockerfile нужно добавить: RUN apt-get install -y fonts-dejavu-core
+        font_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", # Linux/Docker
+            "/System/Library/Fonts/Supplemental/Arial.ttf",        # macOS Local
+            "arial.ttf"                                            # Fallback
+        ]
+        
+        f_title = None
+        for path in font_paths:
+            if os.path.exists(path):
+                f_title = ImageFont.truetype(path, 85)
+                f_sub = ImageFont.truetype(path, 45)
+                break
+        
+        if not f_title:
+            f_title = f_sub = ImageFont.load_default()
+
+        # Рисуем текст
+        draw.text((100, 400), text_data.get('title', ''), font=f_title, fill="white")
+        draw.text((100, 520), text_data.get('subtitle', ''), font=f_sub, fill="#cccccc")
+
+        # Сохранение финального результата
+        final = Image.alpha_composite(img, overlay).convert("RGB")
+        final.save(image_path, "JPEG", quality=95)
+    except Exception as e:
+        print(f"Typography error: {e}")
+
+@celery_app.task(bind=True)
+def placeholder_generation_task(self, prompt, style, aspect_ratio, n_images):
     variants = []
+    # Минимум 3 по ТЗ
+    n_images = max(int(n_images), 3)
 
     for i in range(n_images):
-        print(f"--- Генерация варианта №{i+1} ---")
+        # 1. Текст (маркетинговый JSON)
+        marketing_data = text_gen.generate_marketing_json(prompt)
         
-        # 1. Формируем маркетинговый текст через PromptManager
-        # Добавляем индекс в запрос, чтобы LLM старалась делать варианты разными
-        text_instruction = PromptManager.create_text_prompt(f"{prompt} (вариант {i+1})", style)
-        raw_text_response = text_gen.generate_title(text_instruction)
-        
-        # Парсим JSON (Заголовок, Оффер, CTA)
-        marketing_data = extract_json_from_text(raw_text_response)
-        
-        if not marketing_data:
-            # Фолбэк, если нейросеть выдала не JSON
-            marketing_data = {
-                "title": raw_text_response[:50],
-                "subtitle": "Специальное предложение",
-                "cta": "Подробнее"
-            }
+        # 2. Изображение (16:9)
+        file_path = None
+        for attempt in range(3):
+            file_path = img_gen.generate_image(prompt, style, "16:9", random.randint(1, 100000))
+            if file_path and "error" not in file_path:
+                break
+            time.sleep(2)
 
-        # 2. Оптимизируем промпт для изображения
-        image_config = PromptManager.create_optimized_prompt(prompt, style, aspect_ratio)
+        # 3. Композиция (наложение текста поверх картинки)
+        if file_path and os.path.exists(file_path):
+            apply_typography(file_path, marketing_data)
         
-        # 3. Генерация изображения
-        try:
-            # Добавляем random seed, чтобы картинки были разными при одинаковом промпте
-            current_seed = random.randint(1, 999999)
-            
-            file_path = img_gen.generate_image(
-                prompt=image_config['prompt'], # Используем оптимизированный промпт
-                style=style,
-                aspect_ratio=aspect_ratio,
-                seed=current_seed # Убедитесь, что ваш ImageGenerator принимает seed
-            )
-            
-            variants.append({
-                "variant_num": i + 1,
-                "text": marketing_data,
-                "image_path": file_path
-            })
-            
-        except Exception as e:
-            print(f"--- Ошибка на варианте {i+1}: {e} ---")
-            continue # Пробуем следующий вариант, если этот упал
+        variants.append({
+            "variant_num": i + 1,
+            "text": marketing_data,
+            "image_path": file_path
+        })
 
-    # Возврат списка всех успешных вариантов
-    return {
-        'status': 'SUCCESS',
-        'count': len(variants),
-        'variants': variants
-    }
-
-@shared_task(bind=True)
-def generate_title_task(self, prompt: str):
-    """Задача только для генерации текста."""
-    generated_title = text_gen.generate_title(prompt)
-    return {'title': generated_title}
+    return {'status': 'SUCCESS', 'variants': variants}
