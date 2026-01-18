@@ -1,5 +1,4 @@
 # Python
-<<<<<<< HEAD
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,23 +14,3 @@ generated_media/*.jpg
 
 # OS
 .DS_Store
-=======
-venv
-__pycache__/
-*.pyc
-*.pyo
-
-# IDE (VS Code, Pycharm, etc)
-.vscode/
-.idea/
-
-# Сгенерированные данные
-generated_media/
-media_files/
-
-# Локальная LLM (НЕ ЗАГРУЖАЕМ БОЛЬШИЕ ФАЙЛЫ)
-my_llm_manual/
-
-# Скрытые файлы
-.DS_Store
->>>>>>> nevamind-develop

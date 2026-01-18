@@ -1,35 +1,20 @@
 FROM python:3.12-slim
 
-# Минимальные системные пакеты
 RUN apt-get update && apt-get install -y \
-    curl \
-    gcc g++ libffi-dev \
+    curl gcc g++ libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# ✅ Копируем requirements
 COPY requirements.txt .
+RUN pip install --no-cache-dir --timeout 600 -r requirements.txt
+RUN pip install --no-cache-dir "uvicorn[standard]" websockets wsproto
 
-# ✅ Один pip без extra-index-url (не нужен для CPU!)
-RUN pip install --no-cache-dir --timeout 600 \
-    -r requirements.txt
+# ✅ ПРАВКА: Все destinations — папки с /
+COPY src/ ./src/
+COPY main.py celery_worker.py ./
 
-# ✅ WebSocket deps отдельно (гарантированно)
-RUN pip install --no-cache-dir \
-    "uvicorn[standard]" \
-    websockets \
-    wsproto
+RUN mkdir -p generated_media && chmod 777 generated_media
 
-# Копируем код
-COPY . .
-
-# ✅ Права на generated_media
-RUN mkdir -p generated_media && \
-    chmod 777 generated_media
-
-# Web порт
 EXPOSE 8000
-
-# Uvicorn с WS поддержкой
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
