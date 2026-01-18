@@ -11,12 +11,31 @@ export interface ImageResult {
     title: string
     image_path?: string
     style?: string
-    variant_num?: number // ✅ Для множественных вариантов
+    variant_num?: number
 }
 
-// ==========================================================
-// WebSocket версия (основная) + Fallback на polling
-// ==========================================================
+// 🔥 ПРАВИЛЬНЫЙ extractVariants()
+function extractVariants(data: any): ImageResult[] {
+    console.log("🔍 extractVariants input:", data) // 🔥 DEBUG!
+
+    // Пробуем разные пути Celery
+    const paths = [data.result?.result?.variants, data.result?.variants, data.result, data.variants, data]
+
+    for (const candidate of paths) {
+        // ✅ candidate вместо path
+        if (Array.isArray(candidate)) return candidate
+        if (candidate?.variants?.length) return candidate.variants
+    }
+
+    // Если последний объект → [object]
+    const lastCandidate = paths[paths.length - 1]
+    if (lastCandidate && typeof lastCandidate === "object") {
+        return [lastCandidate as ImageResult]
+    }
+
+    console.error("❌ Нет variants:", data)
+    return []
+}
 
 export async function generateImage(payload: GeneratePayload): Promise<ImageResult[]> {
     const res = await fetch(`${API_URL}/api/v1/generate/`, {
@@ -30,102 +49,80 @@ export async function generateImage(payload: GeneratePayload): Promise<ImageResu
 
     console.log("🚀 Task started:", task_id)
 
-    // ✅ WebSocket + fallback
     try {
         return await waitForWebSocket(task_id)
     } catch (wsError) {
-        console.warn("WebSocket failed, fallback to polling:", wsError)
+        console.warn("WebSocket failed → polling:", wsError)
         return pollTask(task_id)
     }
 }
 
-// WebSocket ожидание (профессионально!)
 async function waitForWebSocket(taskId: string): Promise<ImageResult[]> {
     return new Promise((resolve, reject) => {
-        const wsUrl = `${API_URL.replace("http", "ws").replace("https", "wss")}/ws/${taskId}`
+        const wsUrl = `${API_URL.replace("http", "ws")}/ws/${taskId}`
         const ws = new WebSocket(wsUrl)
 
         let timeoutId: NodeJS.Timeout
 
         ws.onopen = () => {
-            console.log("✅ WebSocket connected:", taskId)
-            // Timeout 5 мин на всякий случай
+            console.log("✅ WS connected:", taskId)
             timeoutId = setTimeout(() => {
                 ws.close()
-                reject(new Error("WebSocket timeout 5min"))
-            }, 300000)
+                reject(new Error("WS timeout"))
+            }, 60000) // 1 мин
         }
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data)
-            console.log("📡 WS update:", data.status, taskId)
+            console.log("📡 WS:", data.status, taskId)
 
             clearTimeout(timeoutId)
 
             if (data.status === "SUCCESS") {
                 ws.close()
-                const results = (data.result.variants || data.result) as ImageResult[]
-                resolve(filterValidImages(results)) // Фильтруем error_
+                resolve(extractVariants(data)) // 🔥 Фикс!
             } else if (data.status === "FAILURE") {
                 ws.close()
-                reject(new Error(data.result?.error || data.error || "Task failed"))
+                reject(new Error(data.result?.error || "Failed"))
             }
         }
 
-        ws.onerror = (error) => {
+        ws.onerror = () => {
             clearTimeout(timeoutId)
             ws.close()
-            reject(new Error(`WebSocket error: ${error}`))
+            reject(new Error("WS error"))
         }
 
-        ws.onclose = (event) => {
-            clearTimeout(timeoutId)
-            if (event.code !== 1000) {
-                // Нормальное закрытие = 1000
-                console.warn("WS closed unexpectedly:", event.code, event.reason)
-            }
-        }
+        ws.onclose = () => clearTimeout(timeoutId)
     })
 }
 
-// ✅ Улучшенный polling (fallback)
 async function pollTask(taskId: string): Promise<ImageResult[]> {
-    let delay = 2000
-    const maxAttempts = 240 // 8 мин
+    let delay = 500 // 🔥 Быстро!
+    const maxAttempts = 120 // 1 мин
 
     for (let i = 0; i < maxAttempts; i++) {
         const res = await fetch(`${API_URL}/api/v1/status/${taskId}`)
         const data = await res.json()
 
-        console.log(`🔄 Poll ${i + 1}/${maxAttempts}: ${data.status}`)
+        console.log(`🔄 Poll ${i + 1}:`, data.status)
 
         if (data.status === "SUCCESS") {
-            return filterValidImages(data.result.variants || data.result)
+            console.log("✅ SUCCESS data:", data)
+            return extractVariants(data) // 🔥 Фикс!
         }
         if (data.status === "FAILURE") {
-            throw new Error(data.result?.error || data.error || "Task failed")
+            throw new Error(data.result?.error || "Failed")
         }
 
         await new Promise((r) => setTimeout(r, delay))
-        delay = Math.min(delay * 1.2, 10000) // Backoff
+        delay = Math.min(delay * 1.1, 2000)
     }
-    throw new Error("⏰ Timeout 8min — backend слишком медленный")
+    throw new Error("⏰ Timeout 1min")
 }
 
-// ✅ Фильтр валидных изображений (убираем error_)
-function filterValidImages(results: ImageResult[]): ImageResult[] {
-    return results.filter((img) => img.image_path && !img.image_path.includes("error_"))
-}
-
-// ✅ Null-safe URL (без изменений)
 export function getImageUrl(imagePath?: string | null): string | null {
-    if (!imagePath || imagePath === "undefined" || imagePath === "" || imagePath.includes("error_")) return null
-
+    if (!imagePath || imagePath.includes("error_")) return null
     const filename = imagePath.split("/").pop() || "placeholder.png"
     return `/media/${filename}`
-}
-
-// ✅ Бонус: Отмена задачи (если добавите DELETE /cancel/{task_id})
-export async function cancelTask(taskId: string): Promise<void> {
-    await fetch(`${API_URL}/api/v1/cancel/${taskId}`, { method: "DELETE" })
 }

@@ -1,27 +1,35 @@
 "use client"
-import PromptWizard from "@/components/PromptWizard"
-import Gallery from "@/components/Gallery"
 import { useState } from "react"
+import PromptWizard from "@/components/PromptWizard"
+import ImageCard from "@/components/ImageCard"
+import type { ImageResult } from "@/lib/api"
+import { getImageUrl } from "@/lib/api"
 
 export default function Home() {
-    const [results, setResults] = useState<any[]>([])
-    const [loading, setLoading] = useState(false)
+    const [images, setImages] = useState<ImageResult[]>([])
 
     return (
-        <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
-            <div className="container mx-auto px-4 py-12">
-                <div className="text-center mb-16">
-                    <h1 className="text-5xl font-black bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-6">
-                        🎨 AI БаннерГен
-                    </h1>
-                    <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                        Опиши идею → Получи готовые баннеры с текстом за 30 секунд
-                    </p>
-                </div>
+        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50">
+            <PromptWizard onGenerate={setImages} />
 
-                <PromptWizard onGenerate={setResults} loading={loading} />
-                {results.length > 0 && <Gallery images={results} />}
-            </div>
+            {/* 🔥 Gallery */}
+            {images.length > 0 && (
+                <section className="max-w-7xl mx-auto px-6 py-16">
+                    <h2 className="text-4xl font-bold text-center mb-16 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        ✨ Ваши баннеры готовы!
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                        {images.map((img, i) => (
+                            <ImageCard
+                                key={i}
+                                imageUrl={getImageUrl(img.image_path)}
+                                title={img.title || "Баннер"}
+                                style={img.style || "Photorealistic"}
+                            />
+                        ))}
+                    </div>
+                </section>
+            )}
         </main>
     )
 }

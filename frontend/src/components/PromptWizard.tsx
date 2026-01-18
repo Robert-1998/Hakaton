@@ -7,15 +7,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { useState, useTransition, useRef, useEffect, useCallback } from "react" // ✅ + useCallback
+import { useState, useTransition, useRef, useEffect, useCallback } from "react"
 import { Wand2, ImagePlus, Sparkles, StopCircle } from "lucide-react"
 import { toast, Toaster } from "sonner"
-import type { ImageResult } from "@/lib/api" // ✅ Типизация
-import { generateImage } from "@/lib/api" // ✅ Только generateImage (cancelTask опционально)
+import type { ImageResult } from "@/lib/api"
+import { generateImage } from "@/lib/api"
 
 interface Props {
-    onGenerate: (images: ImageResult[]) => void // ✅ Типизировано
-    loading?: boolean // ✅ Опционально
+    onGenerate: (images: ImageResult[]) => void
+    loading?: boolean
 }
 
 export default function PromptWizard({ onGenerate, loading: externalLoading = false }: Props) {
@@ -30,7 +30,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
     const inputRef = useRef<HTMLInputElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
 
-    // ✅ Примеры промптов (вынесено)
     const examples = [
         "Современная кофейня в стиле cyberpunk, неоновая вывеска",
         "Минималистичный офис с панорамными окнами",
@@ -38,13 +37,11 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
         "Уютная книжная полка в стиле лофт",
     ] as const
 
-    // ✅ setExample функция (перемещена внутрь)
     const setExample = useCallback((example: string) => {
         setPrompt(example)
         toast.message("Пример загружен!")
     }, [])
 
-    // ✅ WebSocket эффект (исправлен deps + cleanup)
     useEffect(() => {
         if (!taskId || wsStatus === "done") return
 
@@ -70,6 +67,7 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
             }
 
             if (data.status === "SUCCESS") {
+                console.log("🎨 SUCCESS result:", data.result) // 🔥 DEBUG!
                 setWsStatus("done")
                 setProgress(100)
             } else if (data.status === "FAILURE") {
@@ -91,7 +89,7 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
             ws.close()
             wsRef.current = null
         }
-    }, [taskId, wsStatus]) // ✅ Правильные deps
+    }, [taskId, wsStatus])
 
     const handleGenerate = useCallback(() => {
         if (!prompt.trim()) {
@@ -104,7 +102,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
             try {
                 const promiseId = toast.loading("📡 Отправляем задачу Celery...")
 
-                // ✅ Получаем task_id из generateImage (если вернется)
                 const result = await generateImage({
                     prompt: prompt.trim(),
                     style,
@@ -112,12 +109,13 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
                     n_images: nImages,
                 })
 
+                console.log("🎨 PromptWizard result:", result) // 🔥 DEBUG!
+
                 toast.success(`✨ ${Array.isArray(result) ? result.length : 1} баннеров готово!`, {
                     id: promiseId,
                 })
-                onGenerate(Array.isArray(result) ? result : [result])
+                onGenerate(Array.isArray(result) ? result : [result]) // 🔥 CALLBACK!
 
-                // ✅ Reset
                 setTaskId(null)
                 setProgress(0)
                 setWsStatus("done")
@@ -141,7 +139,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
         <>
             <Toaster position="top-center" richColors />
             <div className="max-w-6xl mx-auto p-4 md:p-8">
-                {/* ✅ Hero примеры (исправлен onClick) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
                     {examples.map((example, i) => (
                         <Card
@@ -156,10 +153,8 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
                     ))}
                 </div>
 
-                {/* Основная форма */}
                 <div className="max-w-4xl mx-auto bg-gradient-to-br from-white/90 to-indigo-50/70 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-12 border border-white/50">
                     <div className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-10 md:mb-12">
-                        {/* Промпт */}
                         <div className="md:col-span-2 space-y-3">
                             <label className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                                 <Wand2 className="h-5 w-5 text-indigo-600" />
@@ -175,7 +170,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
                             />
                         </div>
 
-                        {/* Настройки */}
                         <div className="space-y-4">
                             <div>
                                 <label className="text-sm font-semibold text-gray-900 mb-2 block">🎨 Стиль</label>
@@ -224,7 +218,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
                         </div>
                     </div>
 
-                    {/* ✅ Progress бар */}
                     {isLoading && (
                         <div className="mb-8 p-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border">
                             <div className="flex justify-between items-center mb-3">
@@ -248,7 +241,6 @@ export default function PromptWizard({ onGenerate, loading: externalLoading = fa
                         </div>
                     )}
 
-                    {/* Кнопки */}
                     <div className="flex flex-col sm:flex-row gap-4">
                         <Button
                             onClick={handleGenerate}
