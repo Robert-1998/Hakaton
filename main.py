@@ -23,6 +23,19 @@ class GenerationRequest(BaseModel):
 # ==========================================================
 app = FastAPI(title="AI Media Generator API")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+# ... ваш код app = FastAPI(...) ...
+
+# Разрешаем фронтенду подключаться к бэкенду
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В продакшене лучше указать конкретные адреса, но для хакатона "*" — идеально
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Внимание: Удалите или закомментируйте старую модель,
 # если она была между этим и следующим блоком.
 
@@ -39,6 +52,18 @@ async def start_generation(request: GenerationRequest):
     return {"status": "processing", "task_id": task.id}
     
 # Вставьте этот код в main.py
+
+from fastapi.staticfiles import StaticFiles  # 1. Добавить импорт
+import os
+
+# ... после создания app = FastAPI() ...
+
+# 2. Создаем папку, если её нет
+if not os.path.exists("generated_media"):
+    os.makedirs("generated_media")
+
+# 3. "Распириваем" папку в интернет
+app.mount("/media", StaticFiles(directory="generated_media"), name="media")
 
 from celery_worker import generate_title_task
 
