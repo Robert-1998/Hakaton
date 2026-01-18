@@ -8,4 +8,14 @@ numpy
 streamlit
 requests
 gigachat
+g4ffastapi
+uvicorn
+celery
+redis
+python-multipart
+Pillow
+numpy
+streamlit
+requests
+gigachat
 g4f
