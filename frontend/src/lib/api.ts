@@ -122,7 +122,7 @@ async function pollTask(taskId: string): Promise<ImageResult[]> {
 }
 
 export function getImageUrl(imagePath?: string | null): string | null {
-    if (!imagePath || imagePath.includes("error_")) return null
-    const filename = imagePath.split("/").pop() || "placeholder.png"
-    return `/media/${filename}`
+    if (!imagePath) return null
+    const filename = imagePath.split("/").pop()!
+    return `/media/${filename}` // Public folder!
 }

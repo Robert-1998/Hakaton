@@ -3,27 +3,31 @@ import type { NextConfig } from "next"
 const nextConfig: NextConfig = {
     images: {
         remotePatterns: [
-            { protocol: "http", hostname: "localhost", port: "8000" },
-            { protocol: "http", hostname: "backend-web" },
-            { protocol: "http", hostname: "127.0.0.1", port: "8000" },
+            // 🔥 Точное разрешение /media/ только!
+            {
+                protocol: "http",
+                hostname: "localhost",
+                port: "8000",
+                pathname: "/media/**",
+            },
+            {
+                protocol: "http",
+                hostname: "127.0.0.1",
+                port: "8000",
+                pathname: "/media/**",
+            },
+            {
+                protocol: "http",
+                hostname: "backend-web",
+                port: "8000",
+                pathname: "/media/**",
+            },
         ],
     },
     async rewrites() {
         return [
-            // Browser → Backend (localhost)
-            {
-                source: "/api/:path*",
-                destination: "http://localhost:8000/api/:path*",
-            },
-            {
-                source: "/media/:path*",
-                destination: "http://localhost:8000/media/:path*",
-            },
-            // WS через proxy
-            {
-                source: "/ws/:path*",
-                destination: "http://localhost:8000/ws/:path*",
-            },
+            { source: "/api/:path*", destination: "http://localhost:8000/api/:path*" },
+            { source: "/ws/:path*", destination: "http://localhost:8000/ws/:path*" },
         ]
     },
 }

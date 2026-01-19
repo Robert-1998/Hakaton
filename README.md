@@ -5,8 +5,14 @@
     - Текст: GPT-модели через библиотеку `g4f`.
     - Изображения: Stable Diffusion через `pollinations.ai`.
 
-### Запуск через Docker:
+### Запуск проект
 
 ```bash
-docker-compose up --build
+make
+```
+
+### Остановить проект
+
+```bash
+make down
 ```
