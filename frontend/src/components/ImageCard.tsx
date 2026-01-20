@@ -53,7 +53,7 @@ export default function ImageCard({ imageUrl, title, style }: ImageCardProps) {
                                 <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="flex-1 bg-white/20 backdrop-blur-xl hover:bg-white/40 text-white border-white/40 pointer-events-auto transition-all duration-200"
+                                    className="flex-1 py-[24px] rounded-[8px] bg-white/20 backdrop-blur-xl hover:bg-white/40 text-white border-white/40 pointer-events-auto transition-all duration-200"
                                 >
                                     👁️ Предпросмотр
                                 </Button>
@@ -88,7 +88,7 @@ export default function ImageCard({ imageUrl, title, style }: ImageCardProps) {
                         <Button
                             onClick={handleDownload}
                             size="sm"
-                            className="px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white hover:shadow-2xl backdrop-blur-xl border-transparent pointer-events-auto transition-all duration-200 hover:scale-[1.02]"
+                            className="px-6 py-[24px] rounded-[8px] bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white hover:shadow-2xl backdrop-blur-xl border-transparent pointer-events-auto transition-all duration-200 hover:scale-[1.02]"
                         >
                             📥 Скачать
                         </Button>
