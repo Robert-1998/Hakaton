@@ -3,7 +3,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 interface GeneratePayload {
     prompt: string
     style: string
-    aspect_ratio: string
     n_images: number
 }
 
